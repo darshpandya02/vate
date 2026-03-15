@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: vate_user
+          POSTGRES_PASSWORD: vate_password
+          POSTGRES_DB: vate_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vate_user -d vate_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Generate Prisma Client
+        run: npx prisma generate
+      - name: Run migrations
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL=postgresql://vate_user:vate_password@localhost:5432/vate_db
+      - name: Lint
+        run: npm run lint --if-present
+      - name: Unit tests
+        run: npm run test --if-present -- --passWithNoTests
+        env:
+          DATABASE_URL=postgresql://vate_user:vate_password@localhost:5432/vate_db
+          REDIS_URL: redis://default:bahLtwrCBd9rYV2rpDhqvkX88QimfZI2@redis-14776.c84.us-east-1-2.ec2.cloud.redislabs.com:14776
+          JWT_ACCESS_SECRET: test-secret
+          JWT_REFRESH_SECRET: test-refresh-secret
+      - name: Build
+        run: npm run build
+        env:
+          DATABASE_URL=postgresql://vate_user:vate_password@localhost:5432/vate_db
+          REDIS_URL: redis://default:bahLtwrCBd9rYV2rpDhqvkX88QimfZI2@redis-14776.c84.us-east-1-2.ec2.cloud.redislabs.com:14776
+          JWT_ACCESS_SECRET: test-secret
+          JWT_REFRESH_SECRET: test-refresh-secret
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint
+        run: npm run lint --if-present
+      - name: Build
+        run: npm run build -- --configuration=production
+        env:
+          API_URL: http://localhost:3000/api/v1
+          WS_URL: ws://localhost:3000

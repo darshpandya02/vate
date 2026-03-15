@@ -1,0 +1,178 @@
+// Vate - Tinder for Restaurants
+// PostgreSQL schema with UUID, soft delete, indexes
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum SwipeDirection {
+  LEFT
+  RIGHT
+}
+
+enum DietaryPreference {
+  VEGETARIAN
+  VEGAN
+  HALAL
+  KOSHER
+  GLUTEN_FREE
+  NONE
+}
+
+model User {
+  id                String    @id @default(uuid()) @db.Uuid
+  email             String    @unique
+  passwordHash      String?   @map("password_hash")
+  googleId          String?   @unique @map("google_id")
+  name              String?
+  avatarUrl         String?   @map("avatar_url")
+  role              Role      @default(USER)
+  emailVerified     Boolean   @default(false) @map("email_verified")
+  refreshTokenHash  String?   @map("refresh_token_hash")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
+
+  profile    UserProfile?
+  swipes     Swipe[]
+  groups     GroupMember[]
+  ownedGroups Group[]       @relation("GroupAdmin")
+  passwordResets PasswordReset[]
+
+  @@map("users")
+}
+
+model UserProfile {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @unique @map("user_id") @db.Uuid
+  latitude          Float?   @db.Real
+  longitude         Float?   @db.Real
+  searchRadiusKm    Int      @default(5) @map("search_radius_km")
+  priceRangeMin     Int?     @map("price_range_min") // 1-4 scale
+  priceRangeMax     Int?     @map("price_range_max")
+  dietaryPreferences String[] @default([]) @map("dietary_preferences") // DietaryPreference[]
+  cuisinePreferences String[] @default([]) @map("cuisine_preferences")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+model PasswordReset {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  tokenHash String   @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_resets")
+}
+
+model Restaurant {
+  id          String   @id @default(uuid()) @db.Uuid
+  externalId  String?  @unique @map("external_id") // Google/Yelp ID
+  name        String
+  address     String?
+  latitude    Float?   @db.Real
+  longitude   Float?   @db.Real
+  cuisineTypes String[] @default([]) @map("cuisine_types")
+  priceLevel  Int?     @map("price_level") // 1-4
+  rating      Float?   @db.Real
+  imageUrl    String?  @map("image_url")
+  phone       String?
+  website     String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  swipes      Swipe[]
+  groupMatches GroupMatch[]
+
+  @@index([latitude, longitude])
+  @@index([externalId])
+  @@index([deletedAt])
+  @@map("restaurants")
+}
+
+model Swipe {
+  id           String         @id @default(uuid()) @db.Uuid
+  userId       String         @map("user_id") @db.Uuid
+  restaurantId String         @map("restaurant_id") @db.Uuid
+  direction    SwipeDirection
+  createdAt    DateTime       @default(now()) @map("created_at")
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, restaurantId])
+  @@index([userId])
+  @@index([restaurantId])
+  @@index([userId, direction])
+  @@map("swipes")
+}
+
+model Group {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String
+  inviteCode  String    @unique @map("invite_code") @db.VarChar(12)
+  adminId     String    @map("admin_id") @db.Uuid
+  matchThreshold Int    @default(100) @map("match_threshold") // 100 = all must like
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  admin   User          @relation("GroupAdmin", fields: [adminId], references: [id], onDelete: Cascade)
+  members GroupMember[]
+  matches GroupMatch[]
+
+  @@index([inviteCode])
+  @@index([adminId])
+  @@index([deletedAt])
+  @@map("groups")
+}
+
+model GroupMember {
+  id        String   @id @default(uuid()) @db.Uuid
+  groupId   String   @map("group_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  joinedAt  DateTime @default(now()) @map("joined_at")
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([groupId])
+  @@index([userId])
+  @@map("group_members")
+}
+
+model GroupMatch {
+  id           String   @id @default(uuid()) @db.Uuid
+  groupId      String   @map("group_id") @db.Uuid
+  restaurantId String   @map("restaurant_id") @db.Uuid
+  matchedAt    DateTime @default(now()) @map("matched_at")
+
+  group      Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, restaurantId])
+  @@index([groupId])
+  @@index([restaurantId])
+  @@index([matchedAt])
+  @@map("group_matches")
+}
