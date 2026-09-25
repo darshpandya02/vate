@@ -108,25 +108,25 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
 
   async emitGroupMatch(groupId: string, match: unknown) {
     const data = { groupId, match };
-    this.server.to(GROUP_ROOM_PREFIX + groupId).emit('group_match', data);
+    this.server?.to(GROUP_ROOM_PREFIX + groupId).emit('group_match', data);
     await this.redis.publish('group_match', JSON.stringify({ groupId, data }));
   }
 
   async emitMemberJoined(groupId: string, member: unknown) {
     const data = { groupId, member };
-    this.server.to(GROUP_ROOM_PREFIX + groupId).emit('group_member_joined', data);
+    this.server?.to(GROUP_ROOM_PREFIX + groupId).emit('group_member_joined', data);
     await this.redis.publish('group_member_joined', JSON.stringify({ groupId, data }));
   }
 
   async emitMemberLeft(groupId: string, userId: string) {
     const data = { groupId, userId };
-    this.server.to(GROUP_ROOM_PREFIX + groupId).emit('group_member_left', data);
+    this.server?.to(GROUP_ROOM_PREFIX + groupId).emit('group_member_left', data);
     await this.redis.publish('group_member_left', JSON.stringify({ groupId, data }));
   }
 
   async emitProgress(groupId: string, progress: unknown) {
     const data = { groupId, progress };
-    this.server.to(GROUP_ROOM_PREFIX + groupId).emit('group_progress', data);
+    this.server?.to(GROUP_ROOM_PREFIX + groupId).emit('group_progress', data);
     await this.redis.publish('group_progress', JSON.stringify({ groupId, data }));
   }
 }

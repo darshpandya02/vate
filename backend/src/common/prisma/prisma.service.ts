@@ -5,6 +5,9 @@ import { PrismaClient } from '@prisma/client';
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   constructor() {
     super({
+      // VATE_DATABASE_URL lets a deployment override the integration-managed
+      // DATABASE_URL (e.g. to add ?schema=vate on a shared database).
+      datasourceUrl: process.env.VATE_DATABASE_URL || process.env.DATABASE_URL,
       log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
     });
   }

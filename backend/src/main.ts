@@ -9,10 +9,12 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.useWebSocketAdapter(new IoAdapter(app));
+  // Behind Vercel's proxy: use X-Forwarded-For so rate limiting is per client, not global.
+  app.getHttpAdapter().getInstance().set('trust proxy', true);
 
   app.use(helmet());
   app.enableCors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:4200',
+    origin: process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',') : 'http://localhost:4200',
     credentials: true,
   });
 
