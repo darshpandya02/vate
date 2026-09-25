@@ -85,6 +85,7 @@ export class SwipeComponent implements OnInit, OnDestroy {
   private isDragging = false;
   private currentCardIndex = 0;
   private sub: unknown;
+  private swipedIds = new Set<string>();
 
   getTransform = (i: number) => {
     return computed(() => {
@@ -107,7 +108,9 @@ export class SwipeComponent implements OnInit, OnDestroy {
     this.store.dispatch(clearDeck());
     this.store.dispatch(loadDeck({ limit: 10 }));
     this.sub = this.store.select(selectDeck).subscribe((deck) => {
-      this.displayDeck.set(deck);
+      // The prefetch appends to the stored deck, so drop cards already swiped and duplicates.
+      const seen = new Set<string>();
+      this.displayDeck.set(deck.filter((r) => !this.swipedIds.has(r.id) && !seen.has(r.id) && !!seen.add(r.id)));
       this.topIndex.set(0);
     });
   }
@@ -132,6 +135,7 @@ export class SwipeComponent implements OnInit, OnDestroy {
     const top = deck[0];
     this.api.post('/swipes', { restaurantId: top.id, direction }).subscribe({
       next: () => {
+        this.swipedIds.add(top.id);
         this.displayDeck.set(deck.slice(1));
         this.store.dispatch(loadDeck({ limit: 5 })); // prefetch more
       },
