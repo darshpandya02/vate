@@ -1,12 +1,14 @@
-import { Component, OnInit, signal, computed } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import { Store } from '@ngrx/store';
 import { toObservable } from '@angular/core/rxjs-interop';
 import { switchMap } from 'rxjs/operators';
-import { of } from 'rxjs';
+import { of, interval, Subscription } from 'rxjs';
 import { loadMyGroups } from '../../core/store/groups.actions';
-import { loadGroupMatches } from '../../core/store/matches.actions';
+import { loadGroupMatches, loadGroupMatchesSuccess } from '../../core/store/matches.actions';
+import { ApiService } from '../../core/services/api.service';
+import { GroupMatch } from '../../core/models/match.model';
 import { selectGroupsList } from '../../core/store/groups.selectors';
 import { selectMatchesByGroupId, selectMatchesLoading } from '../../core/store/matches.selectors';
 
@@ -52,7 +54,7 @@ import { selectMatchesByGroupId, selectMatchesLoading } from '../../core/store/m
     </div>
   `,
 })
-export class MatchesComponent implements OnInit {
+export class MatchesComponent implements OnInit, OnDestroy {
   selectedGroupId = signal<string | null>(null);
   groups$ = this.store.select(selectGroupsList);
   loading$ = this.store.select(selectMatchesLoading);
@@ -60,9 +62,14 @@ export class MatchesComponent implements OnInit {
     switchMap((id) => (id ? this.store.select(selectMatchesByGroupId(id)) : of([]))),
   );
 
+  // Fallback for live updates: realtime events can miss clients connected to a
+  // different server instance, so refresh the selected group's matches periodically.
+  private poll?: Subscription;
+
   constructor(
     private route: ActivatedRoute,
     private store: Store,
+    private api: ApiService,
   ) {}
 
   ngOnInit() {
@@ -72,6 +79,18 @@ export class MatchesComponent implements OnInit {
       this.selectedGroupId.set(gid);
       this.store.dispatch(loadGroupMatches({ groupId: gid }));
     }
+    this.poll = interval(10000).subscribe(() => {
+      const id = this.selectedGroupId();
+      if (!id) return;
+      this.api.get<GroupMatch[]>('/matches/group/' + id).subscribe({
+        next: (matches) => this.store.dispatch(loadGroupMatchesSuccess({ groupId: id, matches })),
+        error: () => {},
+      });
+    });
+  }
+
+  ngOnDestroy() {
+    this.poll?.unsubscribe();
   }
 
   selectGroup(id: string) {

@@ -19,7 +19,8 @@ export class WebSocketService {
     this.socket = io(this.wsUrl, {
       path: '/ws',
       auth: { token },
-      transports: ['websocket', 'polling'],
+      // WebSocket only: HTTP long-polling needs sticky sessions, which serverless hosting lacks.
+      transports: ['websocket'],
     });
     this.socket.on('group_match', (data: { groupId: string; match: GroupMatch }) => {
       this.store.dispatch(addLiveMatch({ groupId: data.groupId, match: data.match }));
